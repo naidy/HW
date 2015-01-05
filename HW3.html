@@ -1,0 +1,411 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+	body {
+		background-color: #fff;
+		color: #111;
+		margin: 0px;
+		overflow: hidden;
+		font-family: Monospace;
+		font-size: 20px;
+	}
+	#info {
+		position: absolute;
+		top: 0px; width: 100%;
+		
+		padding: 5px;
+		text-align: center;
+		color: #ffff00
+	}
+	a {color: #00ffff}
+	strong {color:red}
+	
+	#container{
+	    z-index: 0; left:0px; top:0px;
+	    overflow: hidden;
+	    position: absolute;
+
+	    width: 100%;
+	    height: 100%;
+    }	
+</style>
+</head>
+<body> 
+
+<div id="container"></div>
+<script src="js/three.min.js"></script>
+<script src="js/dat.gui.min.js"></script>
+<script src="js/System.js"></script>
+
+<audio id="hitsound" style="display:none">
+<source src="sounds/hit.wav" type='audio/wav'>
+</audio>
+
+<audio id="collisionsound" style="display:none">
+<source src="sounds/collision3.wav" type='audio/wav'>
+</audio>
+ 
+<script>
+var scene, renderer, camera;
+var arm, arm2;
+
+var boxMaterial, boxMaterial2;
+var container;
+var mouse = new THREE.Vector2();
+var end, paddle, puck, joint;
+var target = new THREE.Vector3();
+var speed = 0;
+var puck_pos = new THREE.Vector3(0,2,-100);
+var vel = new THREE.Vector3 ();
+var gcontrols;
+var shadowVisible = true;
+var shadow;
+var shadow1, shadow2, shadow3;
+
+var hitSound = document.getElementById ('hitsound');
+var collisionSound = document.getElementById ('collisionsound');
+
+init();
+animate();
+
+function init()
+{
+	container = document.getElementById ("container");
+	var width = container.clientWidth;
+	var height = container.clientHeight;
+
+	renderer = new THREE.WebGLRenderer ({antialias: true});
+	renderer.setSize (width, height);
+	renderer.setClearColor (0x888888);
+	renderer.shadowMapEnabled = true;
+	renderer.shadowMapSoft = true;
+
+	scene = new THREE.Scene();
+	
+	// dat.gui
+	gcontrols = {
+		reset : function() { resetPuck() }
+		//shadowVis : function() { shadowONOFF() }
+	};
+	var gui = new dat.GUI();
+	gui.add (gcontrols, 'reset').name('ResetPuck');
+	//gui.add (gcontrols, 'shadowVis').name('After Image');
+
+	// camera
+	camera = new THREE.PerspectiveCamera (45, width/height, 1, 10000);
+	camera.position.y = 150;
+	camera.position.z = 200;
+	camera.lookAt (new THREE.Vector3(0,0,-100));
+
+	container.appendChild (renderer.domElement); 
+
+	// arm1
+	var boxGeometry = new THREE.BoxGeometry (60, 10,10);
+	boxMaterial = new THREE.MeshLambertMaterial ({color: 0xff0000});
+	var armMesh = new THREE.Mesh (boxGeometry, boxMaterial);
+	arm = new THREE.Object3D();
+	arm.add (armMesh);
+	armMesh.translateOnAxis (new THREE.Vector3(1,0,0), 30);
+	arm.castShadow = true;
+	scene.add (arm);
+
+	// arm2
+	boxGeometry = new THREE.BoxGeometry (60, 10,10);
+	boxMaterial2 = new THREE.MeshLambertMaterial ({color: 0x00ffff});
+	var armMesh2 = new THREE.Mesh (boxGeometry, boxMaterial2);
+	arm2 = new THREE.Object3D();
+	arm2.add (armMesh2);
+	arm2.translateOnAxis (new THREE.Vector3(1,0,0), 60);
+	armMesh2.translateOnAxis (new THREE.Vector3(1,0,0), 30);
+	arm.position.setY (5);
+	arm.add (arm2);
+
+	// end effector
+	var endGeometry = new THREE.CylinderGeometry (9,9,12,32);
+	var endMaterial = new THREE.MeshLambertMaterial ({color: 0x00ff00});
+	end = new THREE.Mesh (endGeometry, endMaterial);
+	end.position.setY (6);
+	end.castShadow = true;
+	scene.add (end);
+	
+	// joint
+	var jointGeometry = new THREE.CylinderGeometry (9,9,12,32);
+	var jointMaterial = new THREE.MeshLambertMaterial ({color: 0x00ff00});
+	joint = new THREE.Mesh (jointGeometry, jointMaterial);
+	joint.translateOnAxis (new THREE.Vector3(1,0,0), 60);
+	joint.position.setY (6);
+	joint.castShadow = true;
+	scene.add (joint);
+	
+	// paddle
+	var paddleGeometry = new THREE.CylinderGeometry (13, 13, 10, 32);
+	var paddleMaterial = new THREE.MeshLambertMaterial ({color: 0x00ffff});
+	paddle = new THREE.Mesh (paddleGeometry, paddleMaterial);
+	paddle.position.set (120, 5, 0);
+	paddle.castShadow = true;
+	scene.add (paddle);
+	
+	// puck
+	var puckGeometry = new THREE.CylinderGeometry (10, 10, 4, 32);
+	var puckMaterial = new THREE.MeshLambertMaterial ({color: 0xffff00});
+	puck = new THREE.Mesh (puckGeometry, puckMaterial);
+	puck.castShadow = true;
+	scene.add (puck);
+	
+	// grid
+	var gridXZ = new THREE.GridHelper(200, 20);
+	gridXZ.setColors( new THREE.Color(0xffffff), new THREE.Color(0xffffff) );
+	gridXZ.position.setZ (-200);
+	scene.add(gridXZ);
+
+	// light
+	light = new THREE.DirectionalLight (0xFFFFFF);
+		light.position.set (20, 50, -15);
+		light.target.position.set (0, 0, -200);
+		light.castShadow = true;
+		light.shadowCameraLeft = -200;
+		light.shadowCameraTop = 200;
+		light.shadowCameraRight = 200;
+		light.shadowCameraBottom = -200;
+		light.shadowCameraNear = 20;
+		light.shadowCameraFar = 2000;
+		light.shadowMapWidth = light.shadowMapHeight = 2048;
+		light.shadowDarkness = .7;
+		
+	scene.add (light);
+
+	var ambientLight = new THREE.AmbientLight (0x111111);
+	scene.add(ambientLight);
+	
+	window.addEventListener ('resize', onWindowResize, false);	
+	renderer.domElement.addEventListener ('mousemove', onDocumentMouseMove, false);
+	
+	// ground
+	var groundTexture = new THREE.ImageUtils.loadTexture ('images/wood.jpg');
+	var groundGeo = new THREE.BoxGeometry (430, 1, 430);
+	var groundMat = new THREE.MeshLambertMaterial ({map: groundTexture});
+	groundMat.map.wrapS = groundMat.map.wrapT = THREE.RepeatWrapping;
+	groundMat.map.repeat.set (3, 3);
+	var ground = new THREE.Mesh (groundGeo, groundMat);
+	ground.position.setZ (-200);
+	ground.receiveShadow = true;
+	scene.add (ground);
+	
+	// background
+	var bgTexture = new THREE.ImageUtils.loadTexture ('images/grass.png');
+	var bgGeo = new THREE.BoxGeometry (3200, 1, 3200);
+	var bgMat = new THREE.MeshLambertMaterial ({map: bgTexture});
+	bgMat.map.wrapS = bgMat.map.wrapT = THREE.RepeatWrapping;
+	bgMat.map.repeat.set (15, 15);
+	var bg = new THREE.Mesh (bgGeo, bgMat);
+	bg.position.set (0, -1, -200);
+	scene.add (bg);
+	
+	// wall
+	var wallTexture = new THREE.ImageUtils.loadTexture ('images/rocks.jpg');
+	var wallGeo = new THREE.BoxGeometry (430, 1, 20);
+	var wallMat = new THREE.MeshLambertMaterial ({map: wallTexture});
+	wallMat.map.wrapS = wallMat.map.wrapT = THREE.RepeatWrapping;
+	wallMat.map.repeat.set (3, 3);
+	var wallF = new THREE.Mesh (wallGeo, wallMat);
+	var wallR = wallF.clone();
+	var wallL = wallF.clone();
+	
+	/*var refractCamera = new THREE.CubeCamera (0.1, 500, 512);
+	scene.add (refractCamera);
+	//refractCamera.renderTarget.mapping = new THREE.CubeRefractionMapping();
+	var refractMat = new THREE.MeshLambertMaterial ({
+									//color: 0xccccff,
+									envMap: refractCamera.renderTarget
+									//refractionRatio: 0.985,
+									//reflectivity: 0.9
+									});
+	var wallN = new THREE.Mesh (wallGeo, refractMat);*/
+	
+	var wallN = wallF.clone();
+	
+	wallF.rotation.x = Math.PI/2;
+	
+	wallR.rotation.x = Math.PI/2;
+	wallR.rotation.z = Math.PI/2;
+	
+	wallL.rotation.x = Math.PI/2;
+	wallL.rotation.z = Math.PI/2;
+	
+	wallN.rotation.x = Math.PI/2;
+	
+	wallF.position.set (0, 10, -415);
+	wallR.position.set (215, 10, -200);
+	wallL.position.set (-215, 10, -200);
+	wallN.position.set (0, 10, 15);
+	
+	//refractCamera.position = wallN.position;
+	
+	var wall = new THREE.Object3D();
+	wall.add (wallF);
+	wall.add (wallR);
+	wall.add (wallL);
+	wall.add (wallN);
+	scene.add (wall);
+	
+	// shadow 殘影效果
+	/*var shadowGeo = new THREE.CylinderGeometry (10, 10, 3, 32);
+	var shadow1Material = new THREE.MeshLambertMaterial ({color: 0x999999});
+	shadow1Material.transparent = true;
+	shadow1Material.opacity = 0.1;
+	
+	var shadow2Material = new THREE.MeshLambertMaterial ({color: 0x999999});
+	shadow1Material.transparent = true;
+	shadow1Material.opacity = 0.1;
+	
+	var shadow3Material = new THREE.MeshLambertMaterial ({color: 0x999999});
+	shadow1Material.transparent = true;
+	shadow1Material.opacity = 0.1;
+	
+	shadow1 = new THREE.Mesh (shadowGeo, shadow1Material);
+	shadow2 = new THREE.Mesh (shadowGeo, shadow2Material);
+	shadow3 = new THREE.Mesh (shadowGeo, shadow3Material);
+	shadow = new THREE.Object3D();
+	shadow.add (shadow1);
+	shadow.add (shadow2);
+	shadow.add (shadow3);
+	scene.add (shadow);*/
+}
+
+function resetPuck()
+{
+	puck_pos.set (0, 2, -100);
+	speed = 0;
+	vel.set (0, 0, 0);
+}
+
+/*function shadowONOFF()
+{
+	shadowVisible = !shadowVisible;
+	if (shadowVisible == true)
+		shadow.visible = true;
+	else
+		shadow.visible = false;
+}*/
+
+/*function shadowMove()
+{
+	shadow3.position.copy (shadow2.position);
+	shadow2.position.copy (shadow1.position);
+	shadow1.position.copy (puck.position);
+}*/
+
+function hit()
+{
+	var distance_v = new THREE.Vector3();
+	var puckpos = new THREE.Vector3();
+	var paddlepos = new THREE.Vector3();
+	puckpos.add (puck.position);
+	paddlepos.add (paddle.position);
+	
+	distance_v.setX (puckpos.x - paddlepos.x);
+	distance_v.setZ (puckpos.z - paddlepos.z);
+	if (distance_v.length() <= 23)
+	{
+		vel.copy (distance_v);
+		speed = 1;
+		hitSound.play();
+	}
+}
+
+function wallcollision()
+{
+	if (puck_pos.x + 10 > 215)
+	{
+		puck_pos.setX (205);
+		vel.x *= -1;
+		collisionSound.play();
+	}
+	if (puck_pos.x - 10 < -215)
+	{
+	    puck_pos.setX (-205);
+		vel.x *= -1;
+		collisionSound.play();
+	}
+	if (puck_pos.z + 10 > 15)
+	{
+		puck_pos.setZ (5);
+		vel.z *= -1;
+		collisionSound.play();
+	}
+	if (puck_pos.z - 10 < -415)
+	{
+		puck_pos.setZ (-405);
+		vel.z *= -1;
+		collisionSound.play();
+	}
+}
+
+function onDocumentMouseMove( event ) {
+	event.preventDefault();
+	mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+	mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+
+	// tracer
+	var depth0 = new THREE.Vector3( mouse.x, mouse.y, 0.0 ).unproject( camera );
+	var depth1 = new THREE.Vector3( mouse.x, mouse.y, 1.0 ).unproject( camera );
+
+	var t = depth0.y / (depth0.y - depth1.y);
+	var x = depth0.x + t * (depth1.x - depth0.x);
+	var z = depth0.z + t * (depth1.z - depth0.z);
+	
+	if (z > 0)
+		z = 0;
+	target.set (x,0,z);
+}
+
+function animate()
+{
+	hit();
+	
+	var dir = new THREE.Vector3 ();
+	dir.copy (vel);
+	
+	dir.multiplyScalar (speed);
+	
+	speed *= 0.98;
+	
+	if (speed > 0)
+		puck_pos.add (dir);
+	
+	wallcollision();
+	//shadowMove();
+	puck.position.copy (puck_pos);
+	
+	requestAnimationFrame ( animate );
+	update();
+	render();
+}
+
+function update()
+{
+	var ans;
+	ans = myik (target);
+}
+
+function onWindowResize()
+{
+	var width = container.clientWidth;
+	var height = container.clientHeight;
+	camera.aspect = width / height;
+	camera.updateProjectionMatrix();
+	renderer.setSize (width, height);
+}
+
+
+function render()
+{
+	drawarm();
+	renderer.render (scene, camera);
+}
+</script>
+</body>
+
+</html>
