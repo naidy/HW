@@ -46,6 +46,10 @@
 <audio id="collisionsound" style="display:none">
 <source src="sounds/collision3.wav" type='audio/wav'>
 </audio>
+
+<audio id="collisionsound_1" style="display:none">
+<source src="sounds/collision3-1.wav" type='audio/wav'>
+</audio>
  
 <script>
 var scene, renderer, camera;
@@ -66,6 +70,7 @@ var shadow1, shadow2, shadow3;
 
 var hitSound = document.getElementById ('hitsound');
 var collisionSound = document.getElementById ('collisionsound');
+var collisionSound_1 = document.getElementById ('collisionsound_1');
 
 init();
 animate();
@@ -333,13 +338,13 @@ function wallcollision()
 	{
 		puck_pos.setZ (5);
 		vel.z *= -1;
-		collisionSound.play();
+		collisionSound_1.play();
 	}
 	if (puck_pos.z - 10 < -415)
 	{
 		puck_pos.setZ (-405);
 		vel.z *= -1;
-		collisionSound.play();
+		collisionSound_1.play();
 	}
 }
 
